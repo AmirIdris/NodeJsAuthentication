@@ -4,6 +4,7 @@ const bodyParser = require("body-parser");
 const session = require('express-session');
 // authentication middleware
 const passport = require("passport");
+const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const User = require("./Model/userModel");
 const ejs = require("ejs");
 const db = require("./config/db");
@@ -27,14 +28,46 @@ app.use(express.static("public"));
 // passport Local Strategy
 passport.use(User.createStrategy())
 // To Use with Session
-passport.serializeUser(User.serializeUser());
-passport.deserializeUser(User.deserializeUser());
+passport.serializeUser(function(user, done) {
+    done(null, user);
+  });
+passport.deserializeUser((id, done)=>{
+    User.findById(id, (err, user)=>{
+        done(err, user);
+
+    });
+});
+passport.use(new GoogleStrategy({
+    clientID: process.env.CLIENT_ID,
+    clientSecret: process.env.CLIENT_SECRETE,
+    callbackURL: "http://localhost:3000/auth/google/secrets",
+    userProfileURL: "https://www.googleapis.com/oauth2/v3/userinfo"
+  },
+  function(accessToken, refreshToken, profile, cb) {
+    User.findOrCreate({ googleId: profile.id }, function (err, user) {
+        console.log(profile)
+      return cb(err, user);
+    });
+  }
+));
+
 app.get('', (req,res)=>{
     console.log(req.session)
 
     res.render('home')
 
 });
+
+app.get('/auth/google',passport.authenticate('google', { scope: ["profile"] }));
+
+app.get('/auth/google/secrets', 
+  passport.authenticate('google', { failureRedirect: '/login' }),
+  function(req, res) {
+    // Successful authentication, redirect home.
+    res.redirect('/secrets');
+  });
+
+
 app.get('/login', (req,res)=>{
 
     res.render('login')
@@ -155,7 +188,12 @@ app.get('/logout', (req,res)=>{
     });
 });
 
+app.get('/cdn', (req, res)=>{
+    res.render("cdn")
 
-app.listen(5000, ()=>{
+});
+
+
+app.listen(3000, ()=>{
     console.log("Server is listening on port 5000");
 });
